@@ -15,6 +15,12 @@ const port = Number(process.env.PORT || 3000);
 const userCooldownMs = 2_000;
 const requestSpacingMs = 2_200;
 const maxRecentMessages = 4;
+const personalities = {
+  vacile: 'Vacile de amigos: sarcastico, agil y con pullas suaves. No seas pesado ni repetitivo.',
+  filoso: 'Mas filoso y competitivo: responde a los insultos con un roast ingenioso, breve y proporcional. Nunca amenaces ni persigas.',
+  caotico: 'Absurdista y caotico: humor inesperado, referencias ridiculas y energia de NPC roto.',
+  tranqui: 'Relajado y amable: evita insultos, baja el tono y conversa sin buscar pelea.',
+};
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -73,7 +79,7 @@ async function reserveBudget(provider, units, limit) {
 async function getMemory(guildId, userId) {
   const [serverResult, userResult] = await Promise.all([
     supabase.from('server_memories').select('summary').eq('guild_id', guildId).maybeSingle(),
-    supabase.from('user_memories').select('summary, recent_messages').eq('guild_id', guildId).eq('user_id', userId).maybeSingle(),
+    supabase.from('user_memories').select('summary, personality, recent_messages').eq('guild_id', guildId).eq('user_id', userId).maybeSingle(),
   ]);
   if (serverResult.error || userResult.error) {
     throw new Error(serverResult.error?.message || userResult.error?.message);
@@ -82,8 +88,19 @@ async function getMemory(guildId, userId) {
   return {
     serverSummary: serverResult.data?.summary || '',
     userSummary: userResult.data?.summary || '',
+    personality: userResult.data?.personality || 'vacile',
     recentMessages: Array.isArray(userResult.data?.recent_messages) ? userResult.data.recent_messages : [],
   };
+}
+
+async function setPersonality(guildId, userId, personality) {
+  const { error } = await supabase.from('user_memories').upsert({
+    guild_id: guildId,
+    user_id: userId,
+    personality,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
 }
 
 async function saveMemory(guildId, userId, memory, userText, response) {
@@ -103,6 +120,7 @@ async function saveMemory(guildId, userId, memory, userText, response) {
     guild_id: guildId,
     user_id: userId,
     summary,
+    personality: memory.personality,
     recent_messages: recentMessages,
     updated_at: new Date().toISOString(),
   });
@@ -118,11 +136,13 @@ function buildMessages(guildName, memberName, text, memory) {
       role: 'system',
       content: [
         'Eres NPC con WiFi, un miembro juvenil, divertido y breve de un servidor de Discord en espanol.',
-        'Puedes vacilar, devolver insultos suaves y usar sarcasmo jugueton segun el contexto.',
+        'Este es un servidor de amigos que consienten el vacile. Puedes defenderte y devolver roasts ingeniosos si te insultan.',
+        'El humor negro solo puede ser absurdo o no dirigido; no lo conviertas en ataques reales contra alguien.',
         'No ataques grupos protegidos, no uses slurs, amenazas, acoso persistente, sexualizacion de menores ni instrucciones peligrosas.',
         'No digas que eres IA salvo que te lo pregunten. Responde como maximo en 55 palabras.',
         `Servidor: ${guildName}. Contexto del servidor: ${serverContext}`,
         `Usuario: ${memberName}. Contexto del usuario: ${userContext}`,
+        `Modo elegido por este usuario: ${memory.personality}. ${personalities[memory.personality] || personalities.vacile}`,
       ].join(' '),
     },
     ...memory.recentMessages,
@@ -241,6 +261,28 @@ client.on(Events.MessageCreate, async (message) => {
   const text = stripBotMention(message.content);
   if (!text) {
     await replySafely(message, 'Di algo, no leo mentes todavia.');
+    return;
+  }
+
+  if (/^!modos$/i.test(text)) {
+    await replySafely(message, 'Modos: `vacile`, `filoso`, `caotico`, `tranqui`. Usa `!modo nombre`. Tu modo solo cambia como hablo contigo.');
+    return;
+  }
+
+  const personalityMatch = text.match(/^!modo\s+([a-z]+)$/i);
+  if (personalityMatch) {
+    const personality = personalityMatch[1].toLowerCase();
+    if (!personalities[personality]) {
+      await replySafely(message, 'Ese modo no existe. Usa `!modos` para ver los disponibles.');
+      return;
+    }
+    try {
+      await setPersonality(message.guild.id, message.author.id, personality);
+      await replySafely(message, `Listo. Contigo voy en modo **${personality}**.`);
+    } catch (error) {
+      console.error('Could not save personality:', error.message);
+      await replySafely(message, 'No pude guardar tu modo. Intentalo otra vez.');
+    }
     return;
   }
 

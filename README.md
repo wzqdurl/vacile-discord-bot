@@ -6,6 +6,7 @@ Bot de Discord pensado para hablar como un miembro mas del servidor. Solo respon
 
 - Usa Groq como proveedor principal, Cloudflare Workers AI como respaldo y Gemini como tercer respaldo.
 - Mantiene memoria persistente por usuario y servidor con Supabase. No mezcla conversaciones entre usuarios.
+- Cada usuario puede elegir como el bot le habla, sin gastar cuota de IA.
 - Limita cada usuario a una consulta cada dos segundos.
 - Reserva presupuesto propio antes de cada llamada para cambiar de proveedor antes de alcanzar sus cuotas gratuitas.
 - Expone `GET /health` para Render y UptimeRobot.
@@ -25,6 +26,22 @@ Bot de Discord pensado para hablar como un miembro mas del servidor. Solo respon
 3. En **Project Settings > API**, copia `Project URL` y la `service_role key` o `secret key`.
 
 La clave de servicio evita reglas de acceso desde el bot y debe mantenerse exclusivamente en variables de entorno de Render.
+
+## Personalidades
+
+El servidor usa vacile de amigos y humor negro no dirigido como tono base. El bot puede defenderse con roasts proporcionales, pero no permite amenazas, slurs ni ataques a grupos protegidos.
+
+Cada persona puede mencionarlo o responderle con:
+
+```text
+!modos
+!modo vacile
+!modo filoso
+!modo caotico
+!modo tranqui
+```
+
+La eleccion se guarda por usuario y servidor, no afecta a otros miembros y no consume una llamada de IA.
 
 ## Desarrollo local
 
