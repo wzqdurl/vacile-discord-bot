@@ -168,7 +168,9 @@ async function callGroq(messages) {
   const completion = await groq.chat.completions.create({
     model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
     temperature: 1.1,
-    max_tokens: 50,
+    // GPT-OSS otherwise spends short completions entirely on hidden reasoning.
+    reasoning_effort: 'none',
+    max_tokens: 90,
     messages,
   });
   return completion.choices[0]?.message?.content?.trim();
@@ -183,7 +185,7 @@ async function callCloudflare(messages) {
         Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ messages, max_tokens: 50, temperature: 1 }),
+      body: JSON.stringify({ messages, max_tokens: 120, temperature: 1 }),
     },
   );
   const payload = await response.json();
@@ -214,8 +216,8 @@ async function callGemini(messages) {
 }
 
 async function generateResponse(messages) {
-  const estimatedTokens = estimateInputTokens(messages) + 50;
-  const cloudflareNeurons = (estimateInputTokens(messages) * 0.004625) + (50 * 0.030475);
+  const estimatedTokens = estimateInputTokens(messages) + 90;
+  const cloudflareNeurons = (estimateInputTokens(messages) * 0.004625) + (120 * 0.030475);
   const providers = [
     { name: 'groq', enabled: true, units: estimatedTokens, limit: 350_000, call: callGroq },
     {
