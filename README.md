@@ -34,14 +34,15 @@ El servidor usa vacile de amigos y humor negro no dirigido como tono base. El bo
 Cada persona puede mencionarlo o responderle con:
 
 ```text
-!modos
-!modo vacile
+!personalidad
+!modo neutro
 !modo filoso
-!modo caotico
+!modo rude
+!modo ekitten
 !modo tranqui
 ```
 
-La eleccion se guarda por usuario y servidor, no afecta a otros miembros y no consume una llamada de IA.
+`!personalidad` abre un panel con botones. La eleccion se guarda por usuario y servidor, no afecta a otros miembros y no consume una llamada de IA. El modo `ekitten` es estrictamente SFW.
 
 ## Desarrollo local
 

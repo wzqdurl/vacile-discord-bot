@@ -2,7 +2,15 @@ import 'dotenv/config';
 import express from 'express';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
-import { Client, Events, GatewayIntentBits } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Client,
+  EmbedBuilder,
+  Events,
+  GatewayIntentBits,
+} from 'discord.js';
 
 const requiredEnvironment = ['DISCORD_TOKEN', 'GROQ_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 const missingEnvironment = requiredEnvironment.filter((name) => !process.env[name]);
@@ -16,9 +24,10 @@ const userCooldownMs = 2_000;
 const requestSpacingMs = 2_200;
 const maxRecentMessages = 4;
 const personalities = {
-  vacile: 'Vacile de amigos: sarcastico, agil y con pullas suaves. No seas pesado ni repetitivo.',
+  neutro: 'Neutro: colega equilibrado, conversacion natural y vacile ligero solo si encaja.',
   filoso: 'Mas filoso y competitivo: responde a los insultos con un roast ingenioso, breve y proporcional. Nunca amenaces ni persigas.',
-  caotico: 'Absurdista y caotico: humor inesperado, referencias ridiculas y energia de NPC roto.',
+  rude: 'Rude: mas borde y directo, con insultos coloquiales proporcionados. Defiendete con ingenio, no con amenazas ni ataques personales graves.',
+  ekitten: 'eKitten SFW: tierno, pegajoso y lleno de emotes inocentes. Sin rol romantico, sexual, manipulador ni dependiente.',
   tranqui: 'Relajado y amable: evita insultos, baja el tono y conversa sin buscar pelea.',
 };
 
@@ -88,7 +97,7 @@ async function getMemory(guildId, userId) {
   return {
     serverSummary: serverResult.data?.summary || '',
     userSummary: userResult.data?.summary || '',
-    personality: userResult.data?.personality || 'vacile',
+    personality: userResult.data?.personality || 'neutro',
     recentMessages: Array.isArray(userResult.data?.recent_messages) ? userResult.data.recent_messages : [],
   };
 }
@@ -142,7 +151,7 @@ function buildMessages(guildName, memberName, text, memory) {
         'No digas que eres IA salvo que te lo pregunten. Responde como maximo en 55 palabras.',
         `Servidor: ${guildName}. Contexto del servidor: ${serverContext}`,
         `Usuario: ${memberName}. Contexto del usuario: ${userContext}`,
-        `Modo elegido por este usuario: ${memory.personality}. ${personalities[memory.personality] || personalities.vacile}`,
+        `Modo elegido por este usuario: ${memory.personality}. ${personalities[memory.personality] || personalities.neutro}`,
       ].join(' '),
     },
     ...memory.recentMessages,
@@ -252,6 +261,42 @@ client.on(Events.Error, (error) => {
   console.error('Discord client error:', error.message);
 });
 
+function personalityPanel() {
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle('Personalidades')
+    .setDescription('Elige como NPC con WiFi habla **contigo**. Tu eleccion no cambia el modo de los demas.')
+    .addFields(
+      { name: 'Neutro', value: 'Colega equilibrado y vacile ligero.', inline: true },
+      { name: 'Filoso', value: 'Roasts ingeniosos y proporcionados.', inline: true },
+      { name: 'Rude', value: 'Mas borde y directo.', inline: true },
+      { name: 'eKitten', value: 'Tierno y SFW.', inline: true },
+      { name: 'Tranqui', value: 'Relajado, sin buscar pelea.', inline: true },
+    );
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('personality:neutro').setLabel('Neutro').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('personality:filoso').setLabel('Filoso').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('personality:rude').setLabel('Rude').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('personality:ekitten').setLabel('eKitten').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId('personality:tranqui').setLabel('Tranqui').setStyle(ButtonStyle.Success),
+  );
+  return { embeds: [embed], components: [buttons] };
+}
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton() || !interaction.guild || !interaction.customId.startsWith('personality:')) return;
+  const personality = interaction.customId.slice('personality:'.length);
+  if (!personalities[personality]) return;
+
+  try {
+    await setPersonality(interaction.guild.id, interaction.user.id, personality);
+    await interaction.reply({ content: `Listo. Contigo voy en modo **${personality}**.`, ephemeral: true });
+  } catch (error) {
+    console.error('Could not save personality button:', error.message);
+    await interaction.reply({ content: 'No pude guardar tu modo. Intentalo otra vez.', ephemeral: true });
+  }
+});
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild) return;
   const mentioned = message.mentions.has(client.user);
@@ -264,8 +309,8 @@ client.on(Events.MessageCreate, async (message) => {
     return;
   }
 
-  if (/^!modos$/i.test(text)) {
-    await replySafely(message, 'Modos: `vacile`, `filoso`, `caotico`, `tranqui`. Usa `!modo nombre`. Tu modo solo cambia como hablo contigo.');
+  if (/^!(personalidad|modos)$/i.test(text)) {
+    await message.reply(personalityPanel());
     return;
   }
 
