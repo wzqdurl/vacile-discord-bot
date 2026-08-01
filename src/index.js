@@ -47,6 +47,15 @@ function stripBotMention(content) {
   return content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim();
 }
 
+async function replySafely(message, content) {
+  try {
+    await message.reply(content);
+  } catch (error) {
+    // A channel override can deny Send Messages even when the bot is online.
+    console.error('Could not send Discord reply:', error.message);
+  }
+}
+
 function estimateInputTokens(messages) {
   return Math.ceil(messages.reduce((total, message) => total + message.content.length, 0) / 4);
 }
@@ -219,6 +228,10 @@ client.once(Events.ClientReady, (readyClient) => {
   console.log(`Connected to Discord as ${readyClient.user.tag}`);
 });
 
+client.on(Events.Error, (error) => {
+  console.error('Discord client error:', error.message);
+});
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || !message.guild) return;
   const mentioned = message.mentions.has(client.user);
@@ -227,13 +240,13 @@ client.on(Events.MessageCreate, async (message) => {
 
   const text = stripBotMention(message.content);
   if (!text) {
-    await message.reply('Di algo, no leo mentes todavia.');
+    await replySafely(message, 'Di algo, no leo mentes todavia.');
     return;
   }
 
   const lastRequest = lastRequestByUser.get(message.author.id) || 0;
   if (Date.now() - lastRequest < userCooldownMs) {
-    await message.reply('Baja dos cambios, te respondo en un segundo.');
+    await replySafely(message, 'Baja dos cambios, te respondo en un segundo.');
     return;
   }
   lastRequestByUser.set(message.author.id, Date.now());
@@ -244,14 +257,14 @@ client.on(Events.MessageCreate, async (message) => {
     const messages = buildMessages(message.guild.name, message.member?.displayName || message.author.username, text, memory);
     const response = await generateResponse(messages);
     if (!response) {
-      await message.reply('Hoy me fundi el cerebro. Vuelvo cuando se reinicien las cuotas.');
+      await replySafely(message, 'Hoy me fundi el cerebro. Vuelvo cuando se reinicien las cuotas.');
       return;
     }
     await saveMemory(message.guild.id, message.author.id, memory, text, response);
-    await message.reply({ content: response, allowedMentions: { repliedUser: false } });
+    await replySafely(message, { content: response, allowedMentions: { repliedUser: false } });
   } catch (error) {
     console.error('Message handling failed:', error.message);
-    await message.reply('Se me cruzaron los cables. Pruebame otra vez en un momento.');
+    await replySafely(message, 'Se me cruzaron los cables. Pruebame otra vez en un momento.');
   }
 });
 
