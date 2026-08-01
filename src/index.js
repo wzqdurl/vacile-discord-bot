@@ -165,8 +165,8 @@ function buildMessages(guildName, memberName, text, memory) {
 
 async function callGroq(messages) {
   const completion = await groq.chat.completions.create({
-    model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
-    temperature: 1,
+    model: process.env.GROQ_MODEL || 'openai/gpt-oss-20b',
+    temperature: 1.1,
     max_tokens: 75,
     messages,
   });
