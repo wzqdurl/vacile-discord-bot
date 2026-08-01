@@ -10,6 +10,7 @@ import {
   EmbedBuilder,
   Events,
   GatewayIntentBits,
+  SlashCommandBuilder,
 } from 'discord.js';
 
 const requiredEnvironment = ['DISCORD_TOKEN', 'GROQ_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
@@ -258,6 +259,21 @@ async function isReplyToBot(message) {
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Connected to Discord as ${readyClient.user.tag}`);
+  const personalityCommand = new SlashCommandBuilder()
+    .setName('personalidad')
+    .setDescription('Abre el panel de personalidades de NPC con WiFi');
+  const commands = [personalityCommand.toJSON()];
+
+  const registerCommands = async () => {
+    if (process.env.DISCORD_GUILD_ID) {
+      await readyClient.application.commands.set(commands, process.env.DISCORD_GUILD_ID);
+      console.log(`Registered personality command in guild ${process.env.DISCORD_GUILD_ID}`);
+    } else {
+      await readyClient.application.commands.set(commands);
+      console.log('Registered personality command globally');
+    }
+  };
+  registerCommands().catch((error) => console.error('Could not register application commands:', error.message));
 });
 
 client.on(Events.Error, (error) => {
@@ -287,16 +303,23 @@ function personalityPanel() {
 }
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isChatInputCommand() && interaction.commandName === 'personalidad') {
+    await interaction.reply(personalityPanel());
+    return;
+  }
+
   if (!interaction.isButton() || !interaction.guild || !interaction.customId.startsWith('personality:')) return;
   const personality = interaction.customId.slice('personality:'.length);
   if (!personalities[personality]) return;
 
   try {
+    await interaction.deferReply({ ephemeral: true });
     await setPersonality(interaction.guild.id, interaction.user.id, personality);
-    await interaction.reply({ content: `Listo. Contigo voy en modo **${personality}**.`, ephemeral: true });
+    await interaction.editReply(`Listo. Contigo voy en modo **${personality}**.`);
   } catch (error) {
     console.error('Could not save personality button:', error.message);
-    await interaction.reply({ content: 'No pude guardar tu modo. Intentalo otra vez.', ephemeral: true });
+    if (interaction.deferred) await interaction.editReply('No pude guardar tu modo. Intentalo otra vez.');
+    else await interaction.reply({ content: 'No pude guardar tu modo. Intentalo otra vez.', ephemeral: true });
   }
 });
 

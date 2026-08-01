@@ -9,6 +9,8 @@ services:
     envVars:
       - key: DISCORD_TOKEN
         sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL

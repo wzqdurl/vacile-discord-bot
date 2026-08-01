@@ -42,7 +42,7 @@ Cada persona puede mencionarlo o responderle con:
 !modo tranqui
 ```
 
-`!personalidad` abre un panel con botones. La eleccion se guarda por usuario y servidor, no afecta a otros miembros y no consume una llamada de IA.
+`/personalidad` abre un panel con botones y aparece en Apps del servidor. Tambien puedes usar `@NPC con WiFi !personalidad`. La eleccion se guarda por usuario y servidor, no afecta a otros miembros y no consume una llamada de IA.
 
 El bot se dirige a adultos: permite vacile, ofensas de vuelta, humor adulto y contenido NSFW entre usuarios mayores de edad. La personalidad es adaptativa: sube o baja el tono segun como te hable cada persona. Mantiene siempre limites fijos que no se negocian: nunca menores, nada no consensuado, sin amenazas creibles, acoso, doxxeo ni instrucciones para causar dano real.
 
