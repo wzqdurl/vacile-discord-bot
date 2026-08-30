@@ -21,6 +21,8 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: OPENCODE_ZEN_API_KEY
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

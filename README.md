@@ -56,6 +56,10 @@ npm start
 
 Completa todas las variables de `.env.example` en `.env`. No publiques ese archivo.
 
+## OpenCode Zen opcional
+
+Crea una clave propia en [OpenCode Zen](https://opencode.ai/auth) y definela como `OPENCODE_ZEN_API_KEY` para habilitar el cuarto respaldo. Por defecto usa `nemotron-3.5-lightning-free`. Los modelos `Free` de Zen son temporales, su cuota puede cambiar sin aviso y algunos pueden usar las conversaciones para mejorar el modelo, asi que no le mandes datos privados.
+
 ## Desplegar en Render
 
 1. Crea un **Web Service** desde este repositorio y deja que Render lea `render.yaml`.
@@ -67,4 +71,4 @@ Render debe ser un **Web Service** para que UptimeRobot pueda mantenerlo despier
 
 ## Limites
 
-Las cuotas gratuitas pueden cambiar. El bot aplica presupuestos propios conservadores: Groq usa hasta 350.000 tokens estimados, Cloudflare hasta 7.500 neuronas estimadas y Gemini hasta 100 solicitudes al dia. Cuando un proveedor agota su presupuesto o falla, intenta el siguiente. Si todos se agotan, el bot permanece conectado y explica que volvera cuando se reinicien las cuotas.
+Las cuotas gratuitas pueden cambiar. El bot aplica presupuestos propios conservadores: Groq usa hasta 350.000 tokens estimados, Cloudflare hasta 7.500 neuronas estimadas, Gemini hasta 100 solicitudes al dia y OpenCode Zen hasta 1.000 solicitudes al dia. Cuando un proveedor agota su presupuesto o falla, intenta el siguiente. Si todos se agotan, el bot permanece conectado y explica que volvera cuando se reinicien las cuotas.

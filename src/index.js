@@ -41,6 +41,13 @@ const groq = new OpenAI({
   baseURL: 'https://api.groq.com/openai/v1',
 });
 
+const zen = process.env.OPENCODE_ZEN_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENCODE_ZEN_API_KEY,
+      baseURL: 'https://opencode.ai/zen/v1',
+    })
+  : null;
+
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const lastRequestByUser = new Map();
 let nextRequestAt = 0;
@@ -215,6 +222,16 @@ async function callGemini(messages) {
   return payload.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 }
 
+async function callZen(messages) {
+  const completion = await zen.chat.completions.create({
+    model: process.env.OPENCODE_ZEN_MODEL || 'nemotron-3.5-lightning-free',
+    temperature: 1,
+    max_tokens: 90,
+    messages,
+  });
+  return completion.choices[0]?.message?.content?.trim();
+}
+
 async function generateResponse(messages) {
   const estimatedTokens = estimateInputTokens(messages) + 90;
   const cloudflareNeurons = (estimateInputTokens(messages) * 0.004625) + (120 * 0.030475);
@@ -233,6 +250,13 @@ async function generateResponse(messages) {
       units: 1,
       limit: 100,
       call: callGemini,
+    },
+    {
+      name: 'opencode-zen',
+      enabled: Boolean(zen),
+      units: 1,
+      limit: 1_000,
+      call: callZen,
     },
   ];
 
