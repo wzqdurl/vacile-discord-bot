@@ -275,12 +275,24 @@ async function callGemini(messages) {
 
 async function callZen(messages) {
   const completion = await zen.chat.completions.create({
-    model: process.env.OPENCODE_ZEN_MODEL || 'nemotron-3.5-lightning-free',
+    model: process.env.OPENCODE_ZEN_MODEL || 'ling-3.0-flash-fin-free',
     temperature: 1,
-    max_tokens: 90,
+    max_tokens: 70,
     messages,
   });
-  return completion.choices[0]?.message?.content?.trim();
+  const content = completion.choices[0]?.message?.content?.trim();
+  if (!content) return null;
+
+  if (/<think>/i.test(content) && !/<\/think>/i.test(content)) {
+    console.warn('OpenCode Zen returned incomplete reasoning; trying the next provider');
+    return null;
+  }
+  const withoutThinkTags = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  if (/^(here'?s |the following is (my )?)?(a )?(thinking|reasoning|analysis) process\b/i.test(withoutThinkTags)) {
+    console.warn('OpenCode Zen exposed reasoning; trying the next provider');
+    return null;
+  }
+  return withoutThinkTags || null;
 }
 
 async function generateResponse(messages) {

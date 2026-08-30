@@ -58,7 +58,7 @@ Completa todas las variables de `.env.example` en `.env`. No publiques ese archi
 
 ## OpenCode Zen opcional
 
-Crea una clave propia en [OpenCode Zen](https://opencode.ai/auth) y definela como `OPENCODE_ZEN_API_KEY` para habilitar el cuarto respaldo. Por defecto usa `nemotron-3.5-lightning-free`. Los modelos `Free` de Zen son temporales, su cuota puede cambiar sin aviso y algunos pueden usar las conversaciones para mejorar el modelo, asi que no le mandes datos privados.
+Crea una clave propia en [OpenCode Zen](https://opencode.ai/auth) y definela como `OPENCODE_ZEN_API_KEY`. Por defecto usa `ling-3.0-flash-fin-free` como proveedor principal. Los modelos `Free` de Zen son temporales, su cuota puede cambiar sin aviso y algunos pueden usar las conversaciones para mejorar el modelo, asi que no le mandes datos privados.
 
 ## Desplegar en Render
 
