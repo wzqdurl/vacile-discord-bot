@@ -236,6 +236,13 @@ async function generateResponse(messages) {
   const estimatedTokens = estimateInputTokens(messages) + 90;
   const cloudflareNeurons = (estimateInputTokens(messages) * 0.004625) + (120 * 0.030475);
   const providers = [
+    {
+      name: 'opencode-zen',
+      enabled: Boolean(zen),
+      units: 1,
+      limit: 1_000,
+      call: callZen,
+    },
     { name: 'groq', enabled: true, units: estimatedTokens, limit: 350_000, call: callGroq },
     {
       name: 'cloudflare',
@@ -250,13 +257,6 @@ async function generateResponse(messages) {
       units: 1,
       limit: 100,
       call: callGemini,
-    },
-    {
-      name: 'opencode-zen',
-      enabled: Boolean(zen),
-      units: 1,
-      limit: 1_000,
-      call: callZen,
     },
   ];
 

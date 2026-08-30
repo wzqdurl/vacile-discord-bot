@@ -4,7 +4,7 @@ Bot de Discord pensado para hablar como un miembro mas del servidor. Solo respon
 
 ## Que hace
 
-- Usa Groq como proveedor principal, Cloudflare Workers AI como respaldo y Gemini como tercer respaldo.
+- Usa OpenCode Zen como proveedor principal, con Groq, Cloudflare Workers AI y Gemini como respaldos en ese orden.
 - Mantiene memoria persistente por usuario y servidor con Supabase. No mezcla conversaciones entre usuarios.
 - Cada usuario puede elegir como el bot le habla, sin gastar cuota de IA.
 - Limita cada usuario a una consulta cada dos segundos.
