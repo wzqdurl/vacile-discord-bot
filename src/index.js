@@ -50,6 +50,8 @@ const zen = process.env.OPENCODE_ZEN_API_KEY
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const lastRequestByUser = new Map();
+const fallbackMemories = new Map();
+const fallbackUsage = new Map();
 let nextRequestAt = 0;
 
 const app = express();
@@ -96,40 +98,70 @@ function estimateInputTokens(messages) {
 }
 
 async function reserveBudget(provider, units, limit) {
-  const { data, error } = await supabase.rpc('reserve_provider_budget', {
-    provider_name: provider,
-    requested_units: units,
-    daily_limit: limit,
-  });
-  if (error) throw new Error(`No se pudo reservar presupuesto de ${provider}: ${error.message}`);
-  return data;
+  try {
+    const { data, error } = await supabase.rpc('reserve_provider_budget', {
+      provider_name: provider,
+      requested_units: units,
+      daily_limit: limit,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (error) {
+    const key = `${new Date().toISOString().slice(0, 10)}:${provider}`;
+    const used = fallbackUsage.get(key) || 0;
+    if (used + units > limit) return false;
+    fallbackUsage.set(key, used + units);
+    console.warn(`Using local budget for ${provider}: ${error.message}`);
+    return true;
+  }
 }
 
 async function getMemory(guildId, userId) {
-  const [serverResult, userResult] = await Promise.all([
-    supabase.from('server_memories').select('summary').eq('guild_id', guildId).maybeSingle(),
-    supabase.from('user_memories').select('summary, personality, recent_messages').eq('guild_id', guildId).eq('user_id', userId).maybeSingle(),
-  ]);
-  if (serverResult.error || userResult.error) {
-    throw new Error(serverResult.error?.message || userResult.error?.message);
-  }
+  const key = `${guildId}:${userId}`;
+  try {
+    const [serverResult, userResult] = await Promise.all([
+      supabase.from('server_memories').select('summary').eq('guild_id', guildId).maybeSingle(),
+      supabase.from('user_memories').select('summary, personality, recent_messages').eq('guild_id', guildId).eq('user_id', userId).maybeSingle(),
+    ]);
+    if (serverResult.error || userResult.error) {
+      throw new Error(serverResult.error?.message || userResult.error?.message);
+    }
 
-  return {
-    serverSummary: serverResult.data?.summary || '',
-    userSummary: userResult.data?.summary || '',
-    personality: userResult.data?.personality || 'neutro',
-    recentMessages: Array.isArray(userResult.data?.recent_messages) ? userResult.data.recent_messages : [],
-  };
+    const memory = {
+      serverSummary: serverResult.data?.summary || '',
+      userSummary: userResult.data?.summary || '',
+      personality: userResult.data?.personality || 'neutro',
+      recentMessages: Array.isArray(userResult.data?.recent_messages) ? userResult.data.recent_messages : [],
+    };
+    fallbackMemories.set(key, memory);
+    return memory;
+  } catch (error) {
+    console.warn(`Using local memory: ${error.message}`);
+    return fallbackMemories.get(key) || {
+      serverSummary: '',
+      userSummary: '',
+      personality: 'neutro',
+      recentMessages: [],
+    };
+  }
 }
 
 async function setPersonality(guildId, userId, personality) {
-  const { error } = await supabase.from('user_memories').upsert({
-    guild_id: guildId,
-    user_id: userId,
-    personality,
-    updated_at: new Date().toISOString(),
-  });
-  if (error) throw new Error(error.message);
+  const key = `${guildId}:${userId}`;
+  const memory = fallbackMemories.get(key) || { serverSummary: '', userSummary: '', recentMessages: [] };
+  fallbackMemories.set(key, { ...memory, personality });
+
+  try {
+    const { error } = await supabase.from('user_memories').upsert({
+      guild_id: guildId,
+      user_id: userId,
+      personality,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    console.warn(`Personality saved locally only: ${error.message}`);
+  }
 }
 
 async function saveMemory(guildId, userId, memory, userText, response) {
@@ -145,15 +177,22 @@ async function saveMemory(guildId, userId, memory, userText, response) {
     .trim()
     .slice(-700);
 
-  const { error } = await supabase.from('user_memories').upsert({
-    guild_id: guildId,
-    user_id: userId,
-    summary,
-    personality: memory.personality,
-    recent_messages: recentMessages,
-    updated_at: new Date().toISOString(),
-  });
-  if (error) console.error('Could not save user memory:', error.message);
+  const key = `${guildId}:${userId}`;
+  fallbackMemories.set(key, { ...memory, userSummary: summary, recentMessages });
+
+  try {
+    const { error } = await supabase.from('user_memories').upsert({
+      guild_id: guildId,
+      user_id: userId,
+      summary,
+      personality: memory.personality,
+      recent_messages: recentMessages,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    console.warn(`Memory saved locally only: ${error.message}`);
+  }
 }
 
 function buildMessages(guildName, memberName, text, memory) {
