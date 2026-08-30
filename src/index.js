@@ -52,7 +52,8 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const lastRequestByUser = new Map();
 const fallbackMemories = new Map();
 const fallbackUsage = new Map();
-let nextRequestAt = 0;
+const providerNextRequestAt = new Map();
+let supabaseRetryAt = Date.now() + 30_000;
 
 const app = express();
 app.get('/health', (_request, response) => {
@@ -62,22 +63,43 @@ app.get('/diagnostic', async (_request, response) => {
   try {
     const { data, error } = await supabase.from('server_memories').select('guild_id').limit(1);
     if (error) {
+      markSupabaseDown(error);
       response.status(500).json({ supabase: 'error', message: error.message });
       return;
     }
+    supabaseRetryAt = 0;
     response.status(200).json({ supabase: 'ok', sample: data });
   } catch (error) {
+    markSupabaseDown(error);
     response.status(500).json({ supabase: 'unreachable', message: error.message, cause: error.cause?.code || error.cause?.message || null });
   }
 });
 app.listen(port, () => console.log(`Health server listening on port ${port}`));
 
-function enqueueRequest(task) {
-  const startAt = Math.max(Date.now(), nextRequestAt);
-  nextRequestAt = startAt + requestSpacingMs;
+supabase.from('server_memories').select('guild_id').limit(1).then(({ error }) => {
+  if (error) markSupabaseDown(error);
+  else supabaseRetryAt = 0;
+}).catch(markSupabaseDown);
+
+function enqueueRequest(provider, task, spacingMs = 0) {
+  const startAt = Math.max(Date.now(), providerNextRequestAt.get(provider) || 0);
+  providerNextRequestAt.set(provider, startAt + spacingMs);
   return new Promise((resolve, reject) => {
     setTimeout(() => task().then(resolve, reject), Math.max(0, startAt - Date.now()));
   });
+}
+
+function markSupabaseDown(error) {
+  if (Date.now() >= supabaseRetryAt) console.warn(`Supabase unavailable for 5 minutes: ${error.message}`);
+  supabaseRetryAt = Date.now() + 5 * 60 * 1_000;
+}
+
+function reserveLocalBudget(provider, units, limit) {
+  const key = `${new Date().toISOString().slice(0, 10)}:${provider}`;
+  const used = fallbackUsage.get(key) || 0;
+  if (used + units > limit) return false;
+  fallbackUsage.set(key, used + units);
+  return true;
 }
 
 function stripBotMention(content) {
@@ -98,6 +120,8 @@ function estimateInputTokens(messages) {
 }
 
 async function reserveBudget(provider, units, limit) {
+  if (Date.now() < supabaseRetryAt) return reserveLocalBudget(provider, units, limit);
+
   try {
     const { data, error } = await supabase.rpc('reserve_provider_budget', {
       provider_name: provider,
@@ -105,19 +129,24 @@ async function reserveBudget(provider, units, limit) {
       daily_limit: limit,
     });
     if (error) throw new Error(error.message);
+    supabaseRetryAt = 0;
     return data;
   } catch (error) {
-    const key = `${new Date().toISOString().slice(0, 10)}:${provider}`;
-    const used = fallbackUsage.get(key) || 0;
-    if (used + units > limit) return false;
-    fallbackUsage.set(key, used + units);
-    console.warn(`Using local budget for ${provider}: ${error.message}`);
-    return true;
+    markSupabaseDown(error);
+    return reserveLocalBudget(provider, units, limit);
   }
 }
 
 async function getMemory(guildId, userId) {
   const key = `${guildId}:${userId}`;
+  const localMemory = () => fallbackMemories.get(key) || {
+    serverSummary: '',
+    userSummary: '',
+    personality: 'neutro',
+    recentMessages: [],
+  };
+  if (Date.now() < supabaseRetryAt) return localMemory();
+
   try {
     const [serverResult, userResult] = await Promise.all([
       supabase.from('server_memories').select('summary').eq('guild_id', guildId).maybeSingle(),
@@ -134,15 +163,11 @@ async function getMemory(guildId, userId) {
       recentMessages: Array.isArray(userResult.data?.recent_messages) ? userResult.data.recent_messages : [],
     };
     fallbackMemories.set(key, memory);
+    supabaseRetryAt = 0;
     return memory;
   } catch (error) {
-    console.warn(`Using local memory: ${error.message}`);
-    return fallbackMemories.get(key) || {
-      serverSummary: '',
-      userSummary: '',
-      personality: 'neutro',
-      recentMessages: [],
-    };
+    markSupabaseDown(error);
+    return localMemory();
   }
 }
 
@@ -150,6 +175,7 @@ async function setPersonality(guildId, userId, personality) {
   const key = `${guildId}:${userId}`;
   const memory = fallbackMemories.get(key) || { serverSummary: '', userSummary: '', recentMessages: [] };
   fallbackMemories.set(key, { ...memory, personality });
+  if (Date.now() < supabaseRetryAt) return;
 
   try {
     const { error } = await supabase.from('user_memories').upsert({
@@ -159,8 +185,9 @@ async function setPersonality(guildId, userId, personality) {
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);
+    supabaseRetryAt = 0;
   } catch (error) {
-    console.warn(`Personality saved locally only: ${error.message}`);
+    markSupabaseDown(error);
   }
 }
 
@@ -179,6 +206,7 @@ async function saveMemory(guildId, userId, memory, userText, response) {
 
   const key = `${guildId}:${userId}`;
   fallbackMemories.set(key, { ...memory, userSummary: summary, recentMessages });
+  if (Date.now() < supabaseRetryAt) return;
 
   try {
     const { error } = await supabase.from('user_memories').upsert({
@@ -190,8 +218,9 @@ async function saveMemory(guildId, userId, memory, userText, response) {
       updated_at: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);
+    supabaseRetryAt = 0;
   } catch (error) {
-    console.warn(`Memory saved locally only: ${error.message}`);
+    markSupabaseDown(error);
   }
 }
 
@@ -330,7 +359,8 @@ async function generateResponse(messages) {
         console.warn(`${provider.name} budget exhausted or unavailable`);
         continue;
       }
-      const response = await enqueueRequest(() => provider.call(messages));
+      const spacingMs = provider.name === 'groq' ? requestSpacingMs : 0;
+      const response = await enqueueRequest(provider.name, () => provider.call(messages), spacingMs);
       if (response) {
         console.log(`AI response generated by ${provider.name}`);
         return response;
