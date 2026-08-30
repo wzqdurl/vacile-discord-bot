@@ -56,6 +56,18 @@ const app = express();
 app.get('/health', (_request, response) => {
   response.status(200).json({ status: 'ok', discord: client.isReady() });
 });
+app.get('/diagnostic', async (_request, response) => {
+  try {
+    const { data, error } = await supabase.from('server_memories').select('guild_id').limit(1);
+    if (error) {
+      response.status(500).json({ supabase: 'error', message: error.message });
+      return;
+    }
+    response.status(200).json({ supabase: 'ok', sample: data });
+  } catch (error) {
+    response.status(500).json({ supabase: 'unreachable', message: error.message, cause: error.cause?.code || error.cause?.message || null });
+  }
+});
 app.listen(port, () => console.log(`Health server listening on port ${port}`));
 
 function enqueueRequest(task) {
