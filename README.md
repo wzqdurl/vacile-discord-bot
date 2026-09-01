@@ -4,19 +4,19 @@ Bot de Discord pensado para hablar como un miembro mas del servidor. Solo respon
 
 ## Que hace
 
-- Usa OpenCode Zen como proveedor principal, con Groq, Cloudflare Workers AI y Gemini como respaldos en ese orden.
+- Usa OpenRouter Free como proveedor principal, seguido de OpenCode Zen, Groq, Cloudflare Workers AI y Gemini.
 - Mantiene memoria persistente por usuario y servidor con Supabase. No mezcla conversaciones entre usuarios.
 - Cada usuario puede elegir como el bot le habla, sin gastar cuota de IA.
 - Limita cada usuario a una consulta cada dos segundos.
 - Reserva presupuesto propio antes de cada llamada para cambiar de proveedor antes de alcanzar sus cuotas gratuitas.
-- Expone `GET /health` para Render y UptimeRobot.
+- Expone `GET /health` para Northflank.
 
 ## Crear las credenciales
 
 1. Crea una aplicacion en el [Discord Developer Portal](https://discord.com/developers/applications), anade un bot y copia su token.
 2. En **Bot > Privileged Gateway Intents**, activa **Message Content Intent**.
 3. En **OAuth2 > URL Generator**, selecciona los scopes `bot` y `applications.commands`; concede al bot permisos para ver canales, enviar mensajes y leer historial.
-4. Crea claves gratuitas en [Groq](https://console.groq.com/keys), [Cloudflare Workers AI](https://dash.cloudflare.com/) y [Google AI Studio](https://aistudio.google.com/app/apikey).
+4. Crea una clave en [OpenRouter](https://openrouter.ai/settings/keys) y claves gratuitas en [Groq](https://console.groq.com/keys), [Cloudflare Workers AI](https://dash.cloudflare.com/) y [Google AI Studio](https://aistudio.google.com/app/apikey).
 5. Crea un proyecto gratuito en [Supabase](https://supabase.com/).
 
 ## Preparar Supabase
@@ -25,7 +25,7 @@ Bot de Discord pensado para hablar como un miembro mas del servidor. Solo respon
 2. Pega y ejecuta el contenido de `supabase/schema.sql`.
 3. En **Project Settings > API**, copia `Project URL` y la `service_role key` o `secret key`.
 
-La clave de servicio evita reglas de acceso desde el bot y debe mantenerse exclusivamente en variables de entorno de Render.
+La clave de servicio evita reglas de acceso desde el bot y debe mantenerse exclusivamente en variables secretas de Northflank.
 
 ## Personalidades
 
@@ -60,15 +60,18 @@ Completa todas las variables de `.env.example` en `.env`. No publiques ese archi
 
 Crea una clave propia en [OpenCode Zen](https://opencode.ai/auth) y definela como `OPENCODE_ZEN_API_KEY`. Por defecto usa `ling-3.0-flash-fin-free` como proveedor principal. Los modelos `Free` de Zen son temporales, su cuota puede cambiar sin aviso y algunos pueden usar las conversaciones para mejorar el modelo, asi que no le mandes datos privados.
 
-## Desplegar en Render
+## Desplegar en Northflank
 
-1. Crea un **Web Service** desde este repositorio y deja que Render lea `render.yaml`.
-2. En las variables de entorno de Render, crea los secretos de `.env.example`.
-3. Despliega. Comprueba `https://TU-SERVICIO.onrender.com/health`.
-4. En UptimeRobot crea un monitor HTTP(S) que consulte esa URL cada 5 minutos.
+1. Conecta GitHub en Northflank y crea un proyecto.
+2. Crea un **Combined Service** desde `wzqdurl/vacile-discord-bot`, rama `master`.
+3. En **Build options**, selecciona `Dockerfile`; la ruta y el contexto son `/`.
+4. Añade como secretos/runtime variables todos los valores necesarios de `.env.example`. Define `PORT=3000`.
+5. En **Ports & DNS**, publica el puerto `3000` con protocolo HTTP.
+6. Configura el health check HTTP con la ruta `/health`.
+7. Usa una sola instancia y activa CI/CD para desplegar cada push de `master`.
 
-Render debe ser un **Web Service** para que UptimeRobot pueda mantenerlo despierto.
+El `Dockerfile` instala solo dependencias de produccion y arranca el bot con `npm start`.
 
 ## Limites
 
-Las cuotas gratuitas pueden cambiar. El bot aplica presupuestos propios conservadores: Groq usa hasta 350.000 tokens estimados, Cloudflare hasta 7.500 neuronas estimadas, Gemini hasta 100 solicitudes al dia y OpenCode Zen hasta 1.000 solicitudes al dia. Cuando un proveedor agota su presupuesto o falla, intenta el siguiente. Si todos se agotan, el bot permanece conectado y explica que volvera cuando se reinicien las cuotas.
+Las cuotas gratuitas pueden cambiar. Sin comprar creditos, OpenRouter Free permite oficialmente 50 solicitudes al dia y 20 por minuto. El bot cambia despues a Zen, Groq, Cloudflare y Gemini. Sus presupuestos internos son: OpenRouter 50 solicitudes, Zen 1.000 solicitudes, Groq 350.000 tokens estimados, Cloudflare 7.500 neuronas estimadas y Gemini 100 solicitudes al dia. Si todos se agotan, el bot permanece conectado y explica que volvera cuando se reinicien las cuotas.
